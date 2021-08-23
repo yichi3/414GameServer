@@ -50,7 +50,7 @@ public class MainFrame {
         // red and black poker
         for (int i = 0; i < numOfDecks; i++) {
             Poker redPoker = new Poker(1, "Red Joker", 17);
-            Poker blackPoker = new Poker(2, "Red Joker", 16);
+            Poker blackPoker = new Poker(2, "Black Joker", 16);
             allPokers.add(redPoker);
             allPokers.add(blackPoker);
             int id = 3;
