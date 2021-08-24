@@ -3,8 +3,10 @@ package com.tonyzyc.model;
 public class Poker {
     private int id;
     private String name;
+    private String color;
     private int num;
     private boolean isOut;
+    private boolean isHun;
 
     public int getId() {
         return id;
@@ -38,19 +40,39 @@ public class Poker {
         isOut = out;
     }
 
+    public String getColor() {
+        return color;
+    }
+
+    public void setColor(String color) {
+        this.color = color;
+    }
+
+    public boolean isHun() {
+        return isHun;
+    }
+
+    public void setHun(boolean hun) {
+        isHun = hun;
+    }
+
     public Poker() {
     }
 
-    public Poker(int id, String name, int num) {
+    public Poker(int id, String name, String color, int num, boolean isHun) {
         this.id = id;
         this.name = name;
+        this.color = color;
         this.num = num;
+        this.isHun = isHun;
     }
 
-    public Poker(int id, String name, int num, boolean isOut) {
+    public Poker(int id, String name, String color, int num, boolean isOut, boolean isHun) {
         this.id = id;
         this.name = name;
+        this.color = color;
         this.num = num;
         this.isOut = isOut;
+        this.isHun = isHun;
     }
 }

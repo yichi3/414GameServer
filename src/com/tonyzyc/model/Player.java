@@ -3,6 +3,7 @@ package com.tonyzyc.model;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class Player {
     private int id;
@@ -58,6 +59,19 @@ public class Player {
                 ", playerUname='" + playerUname + '\'' +
                 ", isFirst=" + isFirst +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Player player = (Player) o;
+        return id == player.id && Objects.equals(playerUname, player.playerUname);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, playerUname);
     }
 
     public Player() {}

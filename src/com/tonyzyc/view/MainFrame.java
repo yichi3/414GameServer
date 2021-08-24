@@ -10,25 +10,34 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class MainFrame {
     private final int numOfPlayers;
     private final int numOfDecks;
-    public List<Player> players = new ArrayList<>();
+    private final int numOfTeams;
+    public Map<Integer, Player> players = new HashMap<>();
+    public Map<Integer, Set<Player>> team = new HashMap<>();
+    public List<Integer> numOfPlayerWithNoPoker = new ArrayList<>();
+    public List<Player> ranking = new ArrayList<>();
     private int index = 0;
     public List<Poker> allPokers = new ArrayList<>();
     // FSM for the game
     // step = 0: player ready info
     public int step = 0;
+    private List<Integer> hunNum = new ArrayList<>();
 
-    public MainFrame(int numOfPlayers) {
+    public MainFrame(int numOfPlayers, int numOfTeams) {
         // create all pokers
         this.numOfPlayers = numOfPlayers;
         this.numOfDecks = numOfPlayers / 2;
-        createPokers();
+        this.numOfTeams = numOfTeams;
+        for (int i = 0; i < numOfTeams; i++) {
+            this.numOfPlayerWithNoPoker.add(0);
+            this.hunNum.add(3);
+        }
+        // start game with first team's hun number
+        createPokers(hunNum.get(0));
         try {
             // create server side socket
             ServerSocket serverSocket = new ServerSocket(8888);
@@ -44,20 +53,22 @@ public class MainFrame {
         }
     }
 
-    public void createPokers() {
+    public void createPokers(int hunNum) {
         String[] names = new String[] {"3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"};
         String[] suits = new String[] {"Spades", "Hearts", "Clubs", "Diamonds"};
         // red and black poker
         for (int i = 0; i < numOfDecks; i++) {
-            Poker redPoker = new Poker(1, "Red Joker", 17);
-            Poker blackPoker = new Poker(2, "Black Joker", 16);
+            Poker redPoker = new Poker(1, "Red Joker", "Red", 17, false);
+            Poker blackPoker = new Poker(2, "Black Joker", "Black", 16, false);
             allPokers.add(redPoker);
             allPokers.add(blackPoker);
             int id = 3;
             for (String suit : suits) {
                 int num = 3;
                 for (String name : names) {
-                    Poker poker = new Poker(id++, suit + " " + name, num++);
+                    String color = (suit.equals("Hearts") || suit.equals("Diamonds")) ? "Red" : "Black";
+                    Poker poker = new Poker(id++, suit + " " + name, color, num, num == hunNum);
+                    num++;
                     allPokers.add(poker);
                 }
             }
@@ -87,9 +98,9 @@ public class MainFrame {
 
     // send message to all clients
     public void sendMessageToClient(String msg) {
-        for (Player player : players) {
+        for (Map.Entry<Integer, Player> entry : players.entrySet()) {
             try {
-                DataOutputStream dataOutputStream = new DataOutputStream(player.getSocket().getOutputStream());
+                DataOutputStream dataOutputStream = new DataOutputStream(entry.getValue().getSocket().getOutputStream());
                 dataOutputStream.writeUTF(msg);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -114,9 +125,13 @@ public class MainFrame {
                         String playerUname = msgJSONObject.getString("playerUname");
                         Player player = new Player(index, playerUname);
                         player.setFirst(index == 0);
-                        index++;
                         player.setSocket(socket);
-                        players.add(player);
+                        players.put(index, player);
+                        // set teams
+                        int teamIndex = index % numOfTeams;
+                        Set<Player> teamSet = team.getOrDefault(teamIndex, new HashSet<>());
+                        teamSet.add(player);
+                        team.put(teamIndex, teamSet);
                         System.out.println(player);
                         System.out.println("Message from client, " + msg + " is online");
                         System.out.println("Current number of players is " + players.size());
@@ -125,8 +140,23 @@ public class MainFrame {
                             dealPoker();
                             step = 1;
                         }
+                        index++;
                     } else if (step == 1) {
                         sendMessageToClient(msg);
+                        JSONObject msgJSONObject = JSONObject.parseObject(msg);
+                        int typeId = msgJSONObject.getInteger("typeId");
+                        int playerId = msgJSONObject.getInteger("playerId");
+                        if (typeId == 10) {
+                            //this means playerId has no poker, record the message
+                            ranking.add(players.get(playerId));
+                            int teamIndex = playerId % numOfTeams;
+                            int num = numOfPlayerWithNoPoker.get(teamIndex) + 1;
+                            numOfPlayerWithNoPoker.set(teamIndex, num);
+                            if (num == numOfPlayers / numOfTeams) {
+                                // this means all players in team teamIndex has no poker, they win
+
+                            }
+                        }
                     }
                 }
             } catch (IOException e) {
