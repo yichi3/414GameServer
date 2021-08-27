@@ -20,21 +20,25 @@ public class MainFrame {
     private int numOfDecks = 1;
     private final int numOfTeams;
     public Map<Integer, Player> players = new HashMap<>();
-    public Map<Integer, Set<Player>> team = new HashMap<>();
-    public List<Integer> numOfPlayerWithNoPoker = new ArrayList<>();
+    public Map<Integer, Set<Integer>> team = new HashMap<>();
+    public List<Set<Integer>> playersWithNoPoker = new ArrayList<>();
     private int index = 0;
     public List<Poker> allPokers = new ArrayList<>();
     public List<Poker> shangGongPokers = new ArrayList<>();
+    public int gongCount = 0;
     public List<Poker> huiGongPokers = new ArrayList<>();
     // FSM for the game
     // step = 0: player ready info
     public int step = 0;
     private int readyPlayerCount = 0;
+    private int chaGouCount = 1;
+    private int lastOutPlayerId = -1;
+    private int continuousPlayerCount = 0;
 
     public MainFrame(int numOfTeams) {
         this.numOfTeams = numOfTeams;
         for (int i = 0; i < numOfTeams; i++) {
-            this.numOfPlayerWithNoPoker.add(0);
+            this.playersWithNoPoker.add(new HashSet<>());
         }
         try {
             // create server side socket
@@ -145,6 +149,9 @@ public class MainFrame {
     private List<Poker> getPokerListFromJSON(JSONObject obj) {
         List<Poker> list = new ArrayList<>();
         JSONArray pokerListJSONArray = obj.getJSONArray("pokers");
+        if (pokerListJSONArray == null) {
+            return list;
+        }
         for (Object o : pokerListJSONArray) {
             JSONObject pokerJSONObject = (JSONObject) o;
             int pokerId = pokerJSONObject.getInteger("id");
@@ -156,6 +163,29 @@ public class MainFrame {
             list.add(poker);
         }
         return list;
+    }
+
+    private int sumList(List<Set<Integer>> list) {
+        int sum = 0;
+        for (Set<Integer> s: list) {
+            sum += s.size();
+        }
+        return sum;
+    }
+
+    private int nextPlayerId() {
+        int teamIndex = lastOutPlayerId % numOfTeams;
+        System.out.println(team.get(0));
+        System.out.println(team.get(1));
+        System.out.println(playersWithNoPoker.get(0));
+        System.out.println(playersWithNoPoker.get(1));
+        for (int i = 1; i < numOfPlayers; i++) {
+            int nextId = (lastOutPlayerId + i) % numOfPlayers;
+            if (team.get(teamIndex).contains(nextId) && !playersWithNoPoker.get(teamIndex).contains(nextId)) {
+                return nextId;
+            }
+        }
+        return -1;
     }
 
     class AcceptThread extends Thread {
@@ -185,8 +215,8 @@ public class MainFrame {
                             players.put(index, player);
                             // set teams
                             int teamIndex = index % numOfTeams;
-                            Set<Player> teamSet = team.getOrDefault(teamIndex, new HashSet<>());
-                            teamSet.add(player);
+                            Set<Integer> teamSet = team.getOrDefault(teamIndex, new HashSet<>());
+                            teamSet.add(index);
                             team.put(teamIndex, teamSet);
                             index++;
                         }
@@ -206,29 +236,110 @@ public class MainFrame {
                         setHun(content);
                         dealPoker();
                         // sendMessageToClient("server go to step 2");
-                        step = 3;
+                        step = 2;
                     } else if (step == 2) {
-                        for (int i = 0; i < numOfPlayers; i++) {
-                            sendMessageToClient(msg);
-                            JSONObject msgJSONObject = JSONObject.parseObject(msg);
-                            List<Poker> gongPokers = getPokerListFromJSON(msgJSONObject);
-                            shangGongPokers.addAll(gongPokers);
+                        System.out.println("step == 2 message: " + msg);
+                        JSONObject msgJSONObject = JSONObject.parseObject(msg);
+                        List<Poker> gongPokers = getPokerListFromJSON(msgJSONObject);
+                        gongCount++;
+                        shangGongPokers.addAll(gongPokers);
+                        if (gongCount == numOfPlayers) {
+                            // now we have all gong, we need to display the gong to client and let them pick
+                            msgJSONObject.put("pokers", shangGongPokers);
+                            msgJSONObject.put("contentString", "所有上供");
+                            System.out.println(msgJSONObject);
+                            sendMessageToClient(msgJSONObject.toString());
+                            if (shangGongPokers.size() == 0) {
+                                // if nobody shanggong, direct go to step 4
+                                step = 6;
+                            } else {
+                                // else we need others to huigong
+                                step = 3;
+                            }
+                            shangGongPokers.clear();
+                            gongCount = 0;
                         }
-                        System.out.println("Get all Gong");
-                        for (Poker p: shangGongPokers) {
-                            System.out.println(p);
-                        }
-                        step = 3;
                     } else if (step == 3) {
+                        // get information from client
+                        System.out.println("step == 3 message: " + msg);
                         sendMessageToClient(msg);
+                        gongCount++;
+                        if (gongCount == numOfPlayers) {
+                            step = 4;
+                            gongCount = 0;
+                        }
+                    } else if (step == 4) {
+                        System.out.println("step == 4 message: " + msg);
+                        JSONObject msgJSONObject = JSONObject.parseObject(msg);
+                        List<Poker> gongPokers = getPokerListFromJSON(msgJSONObject);
+                        gongCount++;
+                        shangGongPokers.addAll(gongPokers);
+                        if (gongCount == numOfPlayers) {
+                            // now we have all gong, we need to display the gong to client and let them pick
+                            msgJSONObject.put("pokers", shangGongPokers);
+                            msgJSONObject.put("contentString", "所有回供");
+                            sendMessageToClient(msgJSONObject.toString());
+                            if (shangGongPokers.size() == 0) {
+                                throw new Exception("Should have 回供");
+                            } else {
+                                // else we need others to huigong
+                                step = 5;
+                            }
+                            shangGongPokers.clear();
+                            gongCount = 0;
+                        }
+                    } else if (step == 5) {
+                        // get information from client
+                        System.out.println("step == 5 message: " + msg);
+                        sendMessageToClient(msg);
+                        gongCount++;
+                        if (gongCount == numOfPlayers) {
+                            step = 6;
+                            gongCount = 0;
+                        }
+                    } else if (step == 6) {
                         JSONObject msgJSONObject = JSONObject.parseObject(msg);
                         int typeId = msgJSONObject.getInteger("typeId");
                         int playerId = msgJSONObject.getInteger("playerId");
+                        if (typeId == 5) {
+                            chaGouCount += 2;
+                            msgJSONObject.put("contentString", chaGouCount+"");
+                            msg = msgJSONObject.toString();
+                        } else if (typeId == 6) {
+                            chaGouCount += 1;
+                            msgJSONObject.put("contentString", chaGouCount+"");
+                            msg = msgJSONObject.toString();
+                        } else {
+                            chaGouCount = 1;
+                        }
+                        sendMessageToClient(msg);
+                        if (typeId == 3) {
+                            // if all remaining player cannot play poker, let the next one in the team go first
+                            continuousPlayerCount++;
+                            if (continuousPlayerCount == numOfPlayers - sumList(playersWithNoPoker)) {
+                                // this means we need to find the next player
+                                if (lastOutPlayerId == -1) {
+                                    throw new Exception("lastOutPlayerId should not be -1");
+                                }
+                                int nextId = nextPlayerId();
+                                if (nextId == -1) {
+                                    throw new Exception("nextId cannot be negative");
+                                }
+                                Message message = new Message(7, nextId, "", "", null);
+                                String msgJSONString = JSON.toJSONString(message);
+                                sendMessageToClient(msgJSONString);
+                            }
+                        } else {
+                            continuousPlayerCount = 0;
+                        }
                         if (typeId == 10) {
                             // this means playerId has no poker, record the message
+                            lastOutPlayerId = playerId;
                             int teamIndex = playerId % numOfTeams;
-                            int num = numOfPlayerWithNoPoker.get(teamIndex) + 1;
-                            numOfPlayerWithNoPoker.set(teamIndex, num);
+                            Set<Integer> s = playersWithNoPoker.get(teamIndex);
+                            s.add(playerId);
+                            int num = s.size();
+                            playersWithNoPoker.set(teamIndex, s);
                             System.out.println(num + " " + numOfPlayers + " " + numOfTeams);
                             if (num == numOfPlayers / numOfTeams) {
                                 // this means all players in team teamIndex has no poker, they win
@@ -237,12 +348,13 @@ public class MainFrame {
                                 String msgJSONString = JSON.toJSONString(message);
                                 sendMessageToClient(msgJSONString);
                                 readyPlayerCount = 0;
+                                gongCount = 0;
                                 step = 0;
                             }
                         }
                     }
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }

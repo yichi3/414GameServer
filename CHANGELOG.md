@@ -7,3 +7,13 @@
 - Need support 上供/回供
 - Need support 叉/勾 with p_3plus rule
 - Need support 叉/勾 to end the game
+- Need support 接风 logic
+
+[0.0.2] 2021-08-26
+- Support 叉/勾 with p_3plus and p_joker rule
+- Support 叉/勾 to end the game
+- Support 接风 logic
+- Need support 上供/回供
+
+[1.0.0] 2021-08-27
+- Beta version released for testing

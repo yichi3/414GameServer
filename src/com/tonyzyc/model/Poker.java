@@ -56,6 +56,16 @@ public class Poker {
         isHun = hun;
     }
 
+    @Override
+    public String toString() {
+        return "Poker{" +
+                "name='" + name + '\'' +
+                ", color='" + color + '\'' +
+                ", num=" + num +
+                ", isHun=" + isHun +
+                '}';
+    }
+
     public Poker() {
     }
 
